@@ -29,8 +29,10 @@ class FacetWP_Facet_Select2
         $values = (array) $params['values'];
         $selected_values = (array) $params['selected_values'];
 
+        $label_any = empty( $facet['label_any'] ) ? __( 'Any', 'fwp' ) : $facet['label_any'];
+
         $output .= '<select class="facetwp-select2">';
-        $output .= '<option value="">- ' . __( 'Any', 'fwp' ) . ' -</option>';
+        $output .= '<option value="">' . esc_attr( $label_any ) . '</option>';
 
         foreach ( $values as $result ) {
             $selected = in_array( $result->facet_value, $selected_values ) ? ' selected' : '';
@@ -69,12 +71,14 @@ class FacetWP_Facet_Select2
 (function($) {
     wp.hooks.addAction('facetwp/load/select2', function($this, obj) {
         $this.find('.facet-source').val(obj.source);
+        $this.find('.facet-label-any').val(obj.label_any);
         $this.find('.type-select2 .facet-orderby').val(obj.orderby);
         $this.find('.type-select2 .facet-count').val(obj.count);
     });
 
     wp.hooks.addFilter('facetwp/save/select2', function($this, obj) {
         obj['source'] = $this.find('.facet-source').val();
+        obj['label_any'] = $this.find('.type-select2 .facet-label-any').val();
         obj['orderby'] = $this.find('.type-select2 .facet-orderby').val();
         obj['count'] = $this.find('.type-select2 .facet-count').val();
         return obj;
@@ -119,6 +123,20 @@ class FacetWP_Facet_Select2
      */
     function settings_html() {
 ?>
+        <tr class="facetwp-conditional type-select2">
+            <td>
+                <?php _e( 'Default label', 'fwp' ); ?>:
+                <div class="facetwp-tooltip">
+                    <span class="icon-question">?</span>
+                    <div class="facetwp-tooltip-content">
+                        Customize the first option label (default: "Any")
+                    </div>
+                </div>
+            </td>
+            <td>
+                <input type="text" class="facet-label-any" value="<?php _e( 'Any', 'fwp' ); ?>" />
+            </td>
+        </tr>
         <tr class="facetwp-conditional type-select2">
             <td><?php _e('Sort by', 'fwp'); ?>:</td>
             <td>
