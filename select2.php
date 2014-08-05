@@ -12,10 +12,62 @@ class FacetWP_Facet_Select2
      * Load the available choices
      */
     function load_values( $params ) {
+        global $wpdb;
 
         // Inherit the load_values() method from the Dropdown facet type
         $dropdown_facet = FWP()->helper->facet_types['dropdown'];
-        return $dropdown_facet->load_values( $params );
+        $facet = $params['facet'];
+
+        $values = $dropdown_facet->load_values( $params );
+
+        // Show "ghost" facet choices (those that return zero results)
+        if ( 'yes' == $facet['ghosts'] ) {
+
+            //$unfiltered_ids = implode( ',', $this->unfiltered_ids );
+            $limit = ctype_digit( $facet['count'] ) ? $facet['count'] : 10;
+
+            // Orderby
+            $orderby = 'counter DESC, f.facet_display_value ASC';
+            if ( 'display_value' == $facet['orderby'] ) {
+                $orderby = 'f.facet_display_value ASC';
+            }
+            elseif ( 'raw_value' == $facet['orderby'] ) {
+                $orderby = 'f.facet_value ASC';
+            }
+
+            $orderby = apply_filters( 'facetwp_facet_orderby', $orderby, $facet );
+
+            // Primary difference here is that $where_clause is omitted to grab all values
+            $sql = "
+            SELECT f.facet_value, f.facet_display_value, f.parent_id, f.depth, 0 AS counter
+            FROM {$wpdb->prefix}facetwp_index f
+            WHERE f.facet_name = '{$facet['name']}'
+            GROUP BY f.facet_value
+            ORDER BY $orderby
+            LIMIT $limit";
+
+            $ghost_output = $wpdb->get_results( $sql );
+
+
+            // Merge data on facet_value
+            $load_values = $dropdown_facet->load_values( $params );
+
+            foreach($ghost_output as $k=>&$option){
+
+                foreach($values as $j=>&$value){
+                    if( $option->facet_value == $value->facet_value){
+                        $option->counter = $value->counter;
+                    }
+                } // foreach system-loaded vals
+
+            } // foreach sql-loaded vals
+            $values = $ghost_output;
+
+        } // if show_ghosts
+
+
+
+        return $values;
     }
 
 
@@ -36,7 +88,8 @@ class FacetWP_Facet_Select2
 
         foreach ( $values as $result ) {
             $selected = in_array( $result->facet_value, $selected_values ) ? ' selected' : '';
-            $display_value = "$result->facet_display_value ($result->counter)";
+            $display_counter = $result->counter ? "($result->counter)" : "";
+            $display_value = "$result->facet_display_value $display_counter";
             $output .= '<option value="' . $result->facet_value . '"' . $selected . '>' . $display_value . '</option>';
         }
 
@@ -74,6 +127,7 @@ class FacetWP_Facet_Select2
         $this.find('.facet-label-any').val(obj.label_any);
         $this.find('.type-select2 .facet-orderby').val(obj.orderby);
         $this.find('.type-select2 .facet-count').val(obj.count);
+        $this.find('.type-select2 .facet-ghosts').val(obj.ghosts);
     });
 
     wp.hooks.addFilter('facetwp/save/select2', function($this, obj) {
@@ -81,6 +135,7 @@ class FacetWP_Facet_Select2
         obj['label_any'] = $this.find('.type-select2 .facet-label-any').val();
         obj['orderby'] = $this.find('.type-select2 .facet-orderby').val();
         obj['count'] = $this.find('.type-select2 .facet-count').val();
+        obj['ghosts'] = $this.find('.type-select2 .facet-ghosts').val();
         return obj;
     });
 })(jQuery);
@@ -154,6 +209,35 @@ class FacetWP_Facet_Select2
             </td>
             <td><input type="text" class="facet-count" value="10" /></td>
         </tr>
+        <tr class="facetwp-conditional type-select2">
+            <td>
+                <?php _e('Show ghosts', 'fwp'); ?>:
+                <div class="facetwp-tooltip">
+                    <span class="icon-question">?</span>
+                    <div class="facetwp-tooltip-content"><?php _e( 'Show choices that would return zero results?', 'fwp' ); ?></div>
+                </div>
+            </td>
+            <td>
+                <select class="facet-ghosts">
+                    <option value="no"><?php _e( 'No', 'fwp' ); ?></option>
+                    <option value="yes"><?php _e( 'Yes', 'fwp' ); ?></option>
+                </select>
+            </td>
+        </tr>
 <?php
+    }
+
+     /**
+     * For ghost facets, get all default facet options
+     */
+    function save_unfiltered_post_ids( $post_ids, $class ) {
+        foreach ( $class->facets as $f ) {
+            if ( isset( $f['ghosts'] ) && 'yes' == $f['ghosts'] ) {
+                $this->unfiltered_ids = $post_ids;
+                break;
+            }
+        }
+
+        return $post_ids;
     }
 }
